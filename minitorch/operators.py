@@ -101,7 +101,7 @@ def exp(x):
 
 def log_back(x, d):
     r"If :math:`f = log` as above, compute d :math:`d \times f'(x)`"
-    return log(x) * d
+    return d / x
 
 
 def inv(x):
@@ -111,7 +111,7 @@ def inv(x):
 
 def inv_back(x, d):
     r"If :math:`f(x) = 1/x` compute d :math:`d \times f'(x)`"
-    return inv(x) * d
+    return -d / x ** 2
 
 
 def relu_back(x, d):
