@@ -191,7 +191,7 @@ class History:
             list of numbers : a derivative with respect to `inputs`
         """
         # TODO: Implement for Task 1.4.
-        raise NotImplementedError('Need to implement for Task 1.4')
+        raise NotImplementedError("Need to implement for Task 1.4")
 
 
 class FunctionBase:
@@ -273,8 +273,11 @@ class FunctionBase:
         """
         # Tip: Note when implementing this function that
         # cls.backward may return either a value or a tuple.
-        # TODO: Implement for Task 1.3.
-        raise NotImplementedError('Need to implement for Task 1.3')
+
+        for i, input in enumerate(inputs):
+            if not is_constant(input):
+                b = cls.backward(ctx, d_output)
+                yield (input, b[i] if isinstance(b, tuple) else b)
 
 
 # Algorithms for backpropagation
@@ -296,7 +299,7 @@ def topological_sort(variable):
                             starting from the right.
     """
     # TODO: Implement for Task 1.4.
-    raise NotImplementedError('Need to implement for Task 1.4')
+    raise NotImplementedError("Need to implement for Task 1.4")
 
 
 def backpropagate(variable, deriv):
@@ -313,4 +316,4 @@ def backpropagate(variable, deriv):
     No return. Should write to its results to the derivative values of each leaf through `accumulate_derivative`.
     """
     # TODO: Implement for Task 1.4.
-    raise NotImplementedError('Need to implement for Task 1.4')
+    raise NotImplementedError("Need to implement for Task 1.4")
