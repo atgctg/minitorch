@@ -1,4 +1,3 @@
-from turtle import clear
 from minitorch.operators import (
     mul,
     add,
