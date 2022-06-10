@@ -182,13 +182,13 @@ class Mul(ScalarFunction):
 
     @staticmethod
     def forward(ctx, a, b):
-        ctx.safe_save_for_backward((a, b))
-        return operators.mul(a, b)
+        ctx.save_for_backward(a, b)
+        return a * b
 
     @staticmethod
     def backward(ctx, d_output):
         a, b = ctx.saved_values
-        return a * d_output, b * d_output
+        return b * d_output, a * d_output
 
 
 class Inv(ScalarFunction):
@@ -210,13 +210,11 @@ class Neg(ScalarFunction):
 
     @staticmethod
     def forward(ctx, a):
-        ctx.save_for_backward(a)
-        return float(operators.neg(a))
+        return operators.neg(a)
 
     @staticmethod
     def backward(ctx, d_output):
-        a = ctx.saved_values
-        return -operators.neg(a) * d_output
+        return operators.neg(d_output)
 
 
 class Sigmoid(ScalarFunction):
@@ -230,7 +228,7 @@ class Sigmoid(ScalarFunction):
     @staticmethod
     def backward(ctx, d_output):
         a = ctx.saved_values
-        return operators.sigmoid(a) - (1 - operators.sigmoid(a)) * d_output
+        return operators.sigmoid_back(a, d_output)
 
 
 class ReLU(ScalarFunction):
@@ -270,7 +268,7 @@ class LT(ScalarFunction):
 
     @staticmethod
     def backward(ctx, d_output):
-        return d_output, d_output
+        return 0.0, 0.0
 
 
 class EQ(ScalarFunction):
@@ -282,7 +280,7 @@ class EQ(ScalarFunction):
 
     @staticmethod
     def backward(ctx, d_output):
-        return d_output, d_output
+        return 0.0, 0.0
 
 
 def derivative_check(f, *scalars):

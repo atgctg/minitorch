@@ -27,7 +27,7 @@ def add(x, y):
 
 def neg(x):
     ":math:`f(x) = -x`"
-    return -x
+    return float(-x)
 
 
 def lt(x, y):
@@ -117,6 +117,10 @@ def inv_back(x, d):
 def relu_back(x, d):
     r"If :math:`f = relu` compute d :math:`d \times f'(x)`"
     return d if x > 0 else 0.0
+
+
+def sigmoid_back(x, d):
+    return d * exp(-x) / ((1 + exp(-x)) ** 2)
 
 
 # ## Task 0.3

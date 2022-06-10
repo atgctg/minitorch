@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 variable_count = 1
 
 
@@ -190,8 +192,8 @@ class History:
         Returns:
             list of numbers : a derivative with respect to `inputs`
         """
-        # TODO: Implement for Task 1.4.
-        raise NotImplementedError("Need to implement for Task 1.4")
+
+        return self.last_fn.chain_rule(self.ctx, self.inputs, d_output)
 
 
 class FunctionBase:
@@ -274,10 +276,10 @@ class FunctionBase:
         # Tip: Note when implementing this function that
         # cls.backward may return either a value or a tuple.
 
+        d = cls.backward(ctx, d_output)
         for i, input in enumerate(inputs):
             if not is_constant(input):
-                b = cls.backward(ctx, d_output)
-                yield (input, b[i] if isinstance(b, tuple) else b)
+                yield (input, d[i] if isinstance(d, tuple) else d)
 
 
 # Algorithms for backpropagation
@@ -298,8 +300,22 @@ def topological_sort(variable):
         list of Variables : Non-constant Variables in topological order
                             starting from the right.
     """
-    # TODO: Implement for Task 1.4.
-    raise NotImplementedError("Need to implement for Task 1.4")
+
+    sorted = []
+    visited = set()
+
+    def visit(var):
+        if var.unique_id in visited:
+            return
+        if not var.is_leaf():
+            for input in var.history.inputs:
+                if not is_constant(input):
+                    visit(input)
+        visited.add(var.unique_id)
+        sorted.insert(0, var)
+
+    visit(variable)
+    return sorted
 
 
 def backpropagate(variable, deriv):
@@ -315,5 +331,16 @@ def backpropagate(variable, deriv):
 
     No return. Should write to its results to the derivative values of each leaf through `accumulate_derivative`.
     """
-    # TODO: Implement for Task 1.4.
-    raise NotImplementedError("Need to implement for Task 1.4")
+
+    sorted = topological_sort(variable)
+
+    d_dict = defaultdict(float)
+    d_dict[variable.unique_id] = deriv
+    for var in sorted:
+        d = d_dict[var.unique_id]
+        if not var.is_leaf():
+            for v, d_part in var.history.backprop_step(d):
+                d_dict[v.unique_id] += d_part
+        else:
+            var.accumulate_derivative(d)
+
