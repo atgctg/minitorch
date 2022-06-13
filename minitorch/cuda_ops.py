@@ -1,3 +1,5 @@
+# Credit (not tested): https://github.com/ethanglaser/minitorch/blob/8bfdac956d/module4/minitorch/cuda_ops.py
+
 from numba import cuda
 import numba
 from .tensor_data import (
@@ -42,8 +44,15 @@ def tensor_map(fn):
     """
 
     def _map(out, out_shape, out_strides, out_size, in_storage, in_shape, in_strides):
-        # TODO: Implement for Task 3.3.
-        raise NotImplementedError('Need to implement for Task 3.3')
+        out_i = numba.cuda.blockIdx.x * THREADS_PER_BLOCK + numba.cuda.threadIdx.x
+        if out_i < out.size:
+            out_index = numba.cuda.local.array(MAX_DIMS, numba.int32)
+            in_index = numba.cuda.local.array(MAX_DIMS, numba.int32)
+            to_index(out_i, out_shape, out_index)
+            broadcast_index(out_index, out_shape, in_shape, in_index)
+            in_position = index_to_position(in_index, in_strides)
+            out_position = index_to_position(out_index, out_strides)
+            out[out_position] = fn(in_storage[in_position])
 
     return cuda.jit()(_map)
 
@@ -101,8 +110,22 @@ def tensor_zip(fn):
         b_shape,
         b_strides,
     ):
-        # TODO: Implement for Task 3.3.
-        raise NotImplementedError('Need to implement for Task 3.3')
+
+        out_i = numba.cuda.blockIdx.x * THREADS_PER_BLOCK + numba.cuda.threadIdx.x
+        if out_i < out.size:
+            out_index = numba.cuda.local.array(MAX_DIMS, numba.int32)
+            a_index = numba.cuda.local.array(MAX_DIMS, numba.int32)
+            b_index = numba.cuda.local.array(MAX_DIMS, numba.int32)
+
+            to_index(out_i, out_shape, out_index)
+            broadcast_index(out_index, out_shape, a_shape, a_index)
+            broadcast_index(out_index, out_shape, b_shape, b_index)
+            a_position, b_position = (
+                index_to_position(a_index, a_strides),
+                index_to_position(b_index, b_strides),
+            )
+            out_position = index_to_position(out_index, out_strides)
+            out[out_position] = fn(a_storage[a_position], b_storage[b_position])
 
     return cuda.jit()(_zip)
 
@@ -145,8 +168,23 @@ def _sum_practice(out, a, size):
 
     """
     BLOCK_DIM = 32
-    # TODO: Implement for Task 3.3.
-    raise NotImplementedError('Need to implement for Task 3.3')
+    local_idx = numba.cuda.threadIdx.x
+    block_idx = numba.cuda.blockIdx.x
+    shared_block = numba.cuda.shared.array(BLOCK_DIM, numba.float64)
+    offset = 1
+
+    if block_idx * THREADS_PER_BLOCK + local_idx < size:
+        shared_block[local_idx] = a[block_idx * THREADS_PER_BLOCK + local_idx]
+    else:
+        shared_block[local_idx] = 0
+
+    while offset < BLOCK_DIM:
+        numba.cuda.syncthreads()
+        if local_idx % (offset * 2) == 0:
+            shared_block[local_idx] += shared_block[local_idx + offset]
+        offset *= 2
+
+    out[block_idx] = shared_block[0]
 
 
 jit_sum_practice = cuda.jit()(_sum_practice)
@@ -195,8 +233,33 @@ def tensor_reduce(fn):
         reduce_value,
     ):
         BLOCK_DIM = 1024
-        # TODO: Implement for Task 3.3.
-        raise NotImplementedError('Need to implement for Task 3.3')
+        reduce_size = a_shape[reduce_dim]
+        local_idx = numba.cuda.threadIdx.x
+        block_idx = numba.cuda.blockIdx.x
+        shared_block = numba.cuda.shared.array(BLOCK_DIM, numba.float64)
+        offset = 1
+
+        out_index = numba.cuda.local.array(MAX_DIMS, numba.int32)
+        to_index(block_idx, out_shape, out_index)
+        out_position = index_to_position(out_index, out_strides)
+
+        if local_idx < reduce_size:
+            out_index[reduce_dim] = local_idx
+            shared_block[local_idx] = a_storage[index_to_position(out_index, a_strides)]
+        else:
+            shared_block[local_idx] = reduce_value
+
+        while offset < BLOCK_DIM:
+            numba.cuda.syncthreads()
+            if local_idx % (offset * 2) == 0:
+                shared_block[local_idx] = fn(
+                    shared_block[local_idx], shared_block[local_idx + offset]
+                )
+            offset *= 2
+
+        numba.cuda.syncthreads()
+        if local_idx == 0:
+            out[out_position] = shared_block[local_idx]
 
     return cuda.jit()(_reduce)
 
@@ -272,8 +335,24 @@ def _mm_practice(out, a, b, size):
 
     """
     BLOCK_DIM = 32
-    # TODO: Implement for Task 3.3.
-    raise NotImplementedError('Need to implement for Task 3.3')
+    shared_a = numba.cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
+    shared_b = numba.cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
+
+    y = numba.cuda.threadIdx.y
+    x = numba.cuda.threadIdx.x
+    if x < size and y < size:
+        shared_a[y, x] = a[y * size + x]
+        shared_b[y, x] = b[y * size + x]
+    else:
+        shared_a[y, x] = 0
+        shared_b[y, x] = 0
+    numba.cuda.syncthreads()
+
+    if y < size and x < size:
+        temp = 0
+        for val in range(size):
+            temp += shared_a[y, val] * shared_b[val, x]
+        out[y * size + x] = temp
 
 
 jit_mm_practice = cuda.jit()(_mm_practice)
@@ -336,17 +415,52 @@ def tensor_matrix_multiply(
     a_batch_stride = a_strides[0] if a_shape[0] > 1 else 0
     b_batch_stride = b_strides[0] if b_shape[0] > 1 else 0
     BLOCK_DIM = 32
-    # TODO: Implement for Task 3.4.
-    raise NotImplementedError('Need to implement for Task 3.4')
+    shared_a = numba.cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
+    shared_b = numba.cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
+
+    y = numba.cuda.threadIdx.y
+    x = numba.cuda.threadIdx.x
+    block_x = numba.cuda.blockIdx.x * BLOCK_DIM
+    block_y = numba.cuda.blockIdx.y * BLOCK_DIM
+    z = numba.cuda.blockIdx.z
+
+    temp = 0
+    for block_index in range((a_shape[-1] + (BLOCK_DIM - 1)) // BLOCK_DIM):
+        block_mid = block_index * BLOCK_DIM
+        if (block_mid + x) < a_shape[-1] and (block_y + y) < a_shape[-2]:
+            shared_a[y, x] = a_storage[
+                z * a_batch_stride
+                + (block_mid + x) * a_strides[-1]
+                + (block_y + y) * a_strides[-2]
+            ]
+        else:
+            shared_a[y, x] = 0
+        if (block_x + x) < b_shape[-1] and (block_mid + y) < b_shape[-2]:
+            shared_b[y, x] = b_storage[
+                z * b_batch_stride
+                + (block_x + x) * b_strides[-1]
+                + (block_mid + y) * b_strides[-2]
+            ]
+        else:
+            shared_b[y, x] = 0
+        numba.cuda.syncthreads()
+
+        for val in range(BLOCK_DIM):
+            temp += shared_a[y, val] * shared_b[val, x]
+
+    if (block_y + y) < out_shape[-2] and (block_x + x) < out_shape[-1]:
+        out[
+            z * out_strides[0]
+            + (block_y + y) * out_strides[-2]
+            + (block_x + x) * out_strides[-1]
+        ] = temp
 
 
 def matrix_multiply(a, b):
     """
     Tensor matrix multiply
-
     Should work for any tensor shapes that broadcast in the first n-2 dims and
     have ::
-
         assert a.shape[-1] == b.shape[-2]
 
     Args:
